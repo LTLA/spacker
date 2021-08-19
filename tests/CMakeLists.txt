@@ -13,6 +13,7 @@ enable_testing()
 add_executable(
     libtest 
     src/pack_psip.cpp
+    src/unpack_psip.cpp
 )
 
 target_link_libraries(

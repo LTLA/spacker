@@ -7,14 +7,35 @@
 #include <array>
 #include <algorithm>
 
+#include "pack_psip.hpp"
+
 namespace spacker {
 
 template<typename T>
-void unpack(size_t ni, const uint8_t* input, size_t no, T* output) {
+void unpack_psip(size_t ni, const uint8_t* input, size_t no, T* output) {
     std::array<T, 8> buffer;
     std::fill_n(buffer.data(), buffer.size(), 0);
     std::array<int, 8> bits;
     std::fill_n(bits.data(), bits.size(), 0);
+
+    std::array<T, 8> maxed;
+    maxed[0] = max_value_psip<T, 0>();
+    maxed[1] = max_value_psip<T, 1>();
+    maxed[2] = max_value_psip<T, 2>();
+    maxed[3] = max_value_psip<T, 3>();
+    constexpr int digits = std::numeric_limits<T>::digits;
+    if constexpr(digits >= (1 << 4)) {
+        maxed[4] = max_value_psip<T, 4>();
+    }
+    if constexpr(digits >= (1 << 5)) {
+        maxed[5] = max_value_psip<T, 5>();
+    }
+    if constexpr(digits >= (1 << 6)) {
+        maxed[6] = max_value_psip<T, 6>();
+    }
+    if constexpr(digits >= (1 << 7)) {
+        maxed[7] = max_value_psip<T, 7>();
+    }
 
     // A boolean flag indicating whether we're still in the preamble.
     // We use int for easier multiplications below. We start at 1
@@ -22,8 +43,9 @@ void unpack(size_t ni, const uint8_t* input, size_t no, T* output) {
     // if it isn't, then it'll get flipped to zero anyway.
     int preamble = 1; 
 
-    // Remaining bits to process in the current integer. 
-    int remaining = 0; 
+    // Remaining bits to process in the current integer. We set it to
+    // 1 because that's what is expected at the start of a new integer. 
+    int remaining = 1; 
 
     // Where are we with respect to the buffers?
     int at = 0; 
@@ -109,7 +131,7 @@ void unpack(size_t ni, const uint8_t* input, size_t no, T* output) {
 
         // Moving results to the output buffer.
         for (int i = 0; i < at; ++i, ++output) {
-            *output = buffer[i] + maxed[bit[i]];
+            *output = buffer[i] + maxed[bits[i]];
         }
 
         // Resetting for the next byte.

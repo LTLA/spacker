@@ -11,6 +11,40 @@
 
 namespace spacker {
 
+template<class Bits, class Buffer>
+inline void unpack_psip_step (int keep, Bits& bits, Buffer& buffer, int& preamble, int& remaining, int& at) {
+    // If preamble = true AND keep = true, we have an extra bit in the
+    // preamble, we increase the remaining count. Otherwise neither
+    // bits nor remaining will change.
+    bits[at] += preamble * keep;
+    remaining <<= preamble * keep;
+
+    // If preamble = false, we left-shift the existing buffer element.
+    // If additionally keep = true, we set the least significant bit.
+    buffer[at] <<= (1 - preamble);
+    buffer[at] |= (1 - preamble) * keep;
+
+    // If preamble = false, we subtract a bit. If we're at the end of
+    // the preamble (i.e., preamble = true and keep = false), we
+    // compute the actual number of remaining bits, by subtracting
+    // the bits used in defining the preamble itself.
+    remaining -= (1 - preamble) + preamble * (1 - keep) * (bits[at] + 1);
+
+    // If keep = false, then the preamble ended (or we we never in it).
+    // If remaining = 0, then we've finished the current integer and
+    // are moving onto the preamble of the next integer. No need to 
+    // worry about this exceeding 1 as remaining > 0 during the preamble. 
+    preamble = preamble * keep + (remaining == 0);
+
+    // If there are no more remaining bits, we must be moving to the
+    // preamble of the next element. In that case, we set remaining = 1
+    // so that later left-shifts have an effect.
+    at += (remaining == 0); 
+    remaining += (remaining == 0);
+
+    return;
+}
+
 template<typename T>
 void unpack_psip(size_t ni, const uint8_t* input, size_t no, T* output) {
     std::array<T, 8> buffer;
@@ -18,23 +52,25 @@ void unpack_psip(size_t ni, const uint8_t* input, size_t no, T* output) {
     std::array<int, 8> bits;
     std::fill_n(bits.data(), bits.size(), 0);
 
-    std::array<T, 8> maxed;
-    maxed[0] = max_value_psip<T, 0>();
-    maxed[1] = max_value_psip<T, 1>();
-    maxed[2] = max_value_psip<T, 2>();
-    maxed[3] = max_value_psip<T, 3>();
+    std::array<T, 8> baseline;
+    std::fill_n(baseline.data(), baseline.size(), 0);
+
+    baseline[0] = min_value_psip<T, 0>();
+    baseline[1] = min_value_psip<T, 1>();
+    baseline[2] = min_value_psip<T, 2>();
+    baseline[3] = min_value_psip<T, 3>();
+    baseline[4] = min_value_psip<T, 4>();
+
+    // TODO: clean this up
     constexpr int digits = std::numeric_limits<T>::digits;
     if constexpr(digits >= (1 << 4)) {
-        maxed[4] = max_value_psip<T, 4>();
+        baseline[5] = min_value_psip<T, 5>();
     }
     if constexpr(digits >= (1 << 5)) {
-        maxed[5] = max_value_psip<T, 5>();
+        baseline[6] = min_value_psip<T, 6>();
     }
     if constexpr(digits >= (1 << 6)) {
-        maxed[6] = max_value_psip<T, 6>();
-    }
-    if constexpr(digits >= (1 << 7)) {
-        maxed[7] = max_value_psip<T, 7>();
+        baseline[7] = min_value_psip<T, 7>();
     }
 
     // A boolean flag indicating whether we're still in the preamble.
@@ -53,86 +89,22 @@ void unpack_psip(size_t ni, const uint8_t* input, size_t no, T* output) {
     for (size_t i = 0; i < ni; ++i, ++input) {
         auto val = *input;
 
-        // Behold the following stack of manually unrolled, no if/else
-        // operations.  The only thing that changes in each step is the
-        // definition of 'keep', so I'll only annotate the first copy.
-        {
-            auto keep = (val & 0b10000000) != 0;
-
-            // If preamble = true AND keep = true, we have an extra bit in the
-            // preamble, we increase the remaining count. Otherwise neither
-            // bits nor remaining will change.
-            bits[at] += preamble * keep;
-            remaining <<= preamble * keep;
-
-            // If preamble = false, we left-shift the existing buffer element.
-            // If additionally keep = true, we set the least significant bit.
-            buffer[at] <<= (1 - preamble);
-            buffer[at] |= (1 - preamble) * keep;
-
-            // If preamble = false, we subtract a bit. If we're at the end of
-            // the preamble (i.e., preamble = true and keep = false), we
-            // compute the actual number of remaining bits, by subtracting
-            // the bits used in defining the preamble itself.
-            remaining -= (1 - preamble) + preamble * (1 - keep) * (bits[at] + 1);
-
-            // If there are no more remaining bits, we must be in the preamble
-            // of the next element. In that case, we set remaining = 1 so that
-            // later left-shifts have an effect.
-            at += (remaining == 0); 
-            preamble = (remaining == 0);
-            remaining += (remaining == 0);
-        }
-
-#define SPACKER_UNROLLED_UNPACKER { \
-            bits[at] += preamble * keep; \
-            remaining <<= preamble * keep; \
-            buffer[at] <<= (1 - preamble); \
-            buffer[at] |= (1 - preamble) * keep; \
-            remaining -= (1 - preamble) + preamble * (1 - keep) * (bits[at] + 1); \
-            at += (remaining == 0); \
-            preamble = (remaining == 0); \
-            remaining += (remaining == 0); \
-}
-        {
-            auto keep = (val & 0b01000000) != 0;
-            SPACKER_UNROLLED_UNPACKER
-        }
-
-        {
-            auto keep = (val & 0b00100000) != 0;
-            SPACKER_UNROLLED_UNPACKER
-        }
-
-        {
-            auto keep = (val & 0b00010000) != 0;
-            SPACKER_UNROLLED_UNPACKER
-        }
-
-        {
-            auto keep = (val & 0b00001000) != 0;
-            SPACKER_UNROLLED_UNPACKER
-        }
-
-        {
-            auto keep = (val & 0b00000100) != 0;
-            SPACKER_UNROLLED_UNPACKER
-        }
-
-        {
-            auto keep = (val & 0b00000010) != 0;
-            SPACKER_UNROLLED_UNPACKER
-        }
-
-        {
-            auto keep = (val & 0b00000001) != 0;
-            SPACKER_UNROLLED_UNPACKER
-        }
+        // Manually unrolled. 
+        unpack_psip_step ((val & 0b10000000) != 0, bits, buffer, preamble, remaining, at);
+        unpack_psip_step ((val & 0b01000000) != 0, bits, buffer, preamble, remaining, at);
+        unpack_psip_step ((val & 0b00100000) != 0, bits, buffer, preamble, remaining, at);
+        unpack_psip_step ((val & 0b00010000) != 0, bits, buffer, preamble, remaining, at);
+        unpack_psip_step ((val & 0b00001000) != 0, bits, buffer, preamble, remaining, at);
+        unpack_psip_step ((val & 0b00000100) != 0, bits, buffer, preamble, remaining, at);
+        unpack_psip_step ((val & 0b00000010) != 0, bits, buffer, preamble, remaining, at);
+        unpack_psip_step ((val & 0b00000001) != 0, bits, buffer, preamble, remaining, at);
 
         // Moving results to the output buffer.
-        for (int i = 0; i < at; ++i, ++output) {
-            *output = buffer[i] + maxed[bits[i]];
+        int bound = std::min(static_cast<size_t>(at), no);
+        for (int i = 0; i < bound; ++i, ++output) {
+            *output = buffer[i] + baseline[bits[i]];
         }
+        no -= bound;
 
         // Resetting for the next byte.
         std::fill_n(buffer.data(), at, 0);
@@ -140,8 +112,8 @@ void unpack_psip(size_t ni, const uint8_t* input, size_t no, T* output) {
         if (at && at < buffer.size()) {
             std::swap(buffer[0], buffer[at]);
             std::swap(bits[0], bits[at]);
-            at = 0;
-        }
+        } 
+        at = 0;
     }
 
     return;

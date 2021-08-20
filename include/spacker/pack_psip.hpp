@@ -148,18 +148,19 @@ std::vector<uint8_t> pack_psip (size_t n, const T* input) {
                 leftover = width - overflow;
             }
 
-            // Adding the rest of the signature.
+            // Adding the rest of the signature. This requires some fiddling
+            // to account for potential differences in integer width.
             int required = (1 << bits) - siglen;
-            int processed = std::numeric_limits<T>::digits - siglen;
+            constexpr int available = std::numeric_limits<T>::digits;
+
             while (required > leftover) {
                 buffer <<= leftover;
 
-                int shift = processed - leftover; 
-                auto first = (val >> shift) & 0b11111111;
+                int shift = required - leftover; 
+                auto first = (shift > available ? 0 : (val >> shift) & 0b11111111);
                 buffer |= static_cast<uint8_t>(first);
                 output.push_back(buffer);
 
-                processed -= leftover;
                 required -= leftover;
                 buffer = 0;
                 leftover = width;

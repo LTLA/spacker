@@ -82,9 +82,16 @@ TEST(PackTest, ByteOverflow) {
     ASSERT_EQ(packed.size(), 2);
     EXPECT_EQ(packed[0], 0b01101111);
     EXPECT_EQ(packed[1], 0b00001000);
+
+    // A number above the max_value naturally overflows.
+    sample = std::vector<uint8_t>{ 22 };
+    packed = spacker::pack_psip(sample.size(), sample.data());
+    ASSERT_EQ(packed.size(), 2);
+    EXPECT_EQ(packed[0], 0b11110000);
+    EXPECT_EQ(packed[1], 0b00000001); // 00...001 = 1 -> +20+1 = 22
 }
 
-TEST(PackTest, Short) {
+TEST(PackTest, ShortAgain) {
     std::vector<uint16_t> sample{ 22 };
     auto packed = spacker::pack_psip(sample.size(), sample.data());
     ASSERT_EQ(packed.size(), 2);
@@ -96,6 +103,12 @@ TEST(PackTest, Short) {
     ASSERT_EQ(packed.size(), 2);
     EXPECT_EQ(packed[0], 0b11110111);
     EXPECT_EQ(packed[1], 0b11111111); // 111.1111 = 2047 -> +20+1 = 2068
+
+    // Checking that smaller values are still handled properly.
+    sample[0] = 10;
+    packed = spacker::pack_psip(sample.size(), sample.data());
+    ASSERT_EQ(packed.size(), 1);
+    EXPECT_EQ(packed[0], 0b11100101); // 101 = 5 -> +4+1 = 10 
 }
 
 TEST(PackTest, ShortOverflow) {
@@ -117,6 +130,15 @@ TEST(PackTest, ShortOverflow) {
     EXPECT_EQ(packed[2], 0b00011111);
     EXPECT_EQ(packed[3], 0b01111111);
     EXPECT_EQ(packed[4], 0b11110000);
+
+    // A number above the max_value naturally overflows.
+    sample = std::vector<uint16_t>{ 2070 };
+    packed = spacker::pack_psip(sample.size(), sample.data());
+    ASSERT_EQ(packed.size(), 4);
+    EXPECT_EQ(packed[0], 0b11111000);
+    EXPECT_EQ(packed[1], 0); 
+    EXPECT_EQ(packed[2], 0);
+    EXPECT_EQ(packed[3], 1); // 00...001 = 1 -> +2068+1 = 2070
 }
 
 TEST(PackTest, Word) {

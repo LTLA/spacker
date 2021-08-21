@@ -213,7 +213,7 @@ std::vector<uint8_t> pack_psip (size_t n, const T* input) {
                     run_width = 5;
                 } else if (count <= max_value_psip<size_t, 6>()) {
                     run_width = 6;
-                } else if (count <= max_value_psip<size_t, 7>()) {
+                } else {
                     run_width = 7;
                 }
 
@@ -224,7 +224,7 @@ std::vector<uint8_t> pack_psip (size_t n, const T* input) {
 
                 if (naive_cost > rle_cost) {
                     // Adding the length.
-                    pack_psip_inner(width, leftover, buffer, output);
+                    pack_psip_inner(count, leftover, buffer, output);
 
                     if (leftover < width && leftover > 0) { 
                         // Padding the current buffer with 1's.

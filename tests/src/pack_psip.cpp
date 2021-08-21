@@ -181,10 +181,10 @@ TEST(PackTest, RleSimple) {
     EXPECT_FALSE(0b10000000 & sample[0]); // first bit is a zero.
 
     EXPECT_EQ(val.size(), 4);
-    EXPECT_EQ(val[0], 0b01111000); // remaining bits represent a value of 100.
-    EXPECT_EQ(val[1], 0b00100111);
-    EXPECT_EQ(val[2], 0b11111111); // padded with 1's to the end of the byte.
-    EXPECT_EQ(val[3], 0b11111111); // rle flag
+    EXPECT_EQ(val[0], 0b01111111); // padded with 1's.
+    EXPECT_EQ(val[1], 0b11111111); // rle flag
+    EXPECT_EQ(val[2], 0b11110000); // remaining bits represent a value of 100.
+    EXPECT_EQ(val[3], 0b01001111);
 }
 
 TEST(PackTest, RleComplicated) {
@@ -195,17 +195,17 @@ TEST(PackTest, RleComplicated) {
     
     EXPECT_EQ(val.size(), 4);
     EXPECT_EQ(val[0], 0b11011100); // 4, then 3.
-    EXPECT_EQ(val[1], 0b11101111); // 20
-    EXPECT_EQ(val[2], 0b11111111); // rle flag
+    EXPECT_EQ(val[1], 0b11111111); // rle flag
+    EXPECT_EQ(val[2], 0b11101111); // 20
     EXPECT_EQ(val[3], 0b11010000); // the terminating 4
 
     sample[0] = 1;
     val = spacker::pack_psip<true>(sample.size(), sample.data());
 
     EXPECT_EQ(val.size(), 4);
-    EXPECT_EQ(val[0], 0b01100111); // 1, then 3, then the start of 20.
-    EXPECT_EQ(val[1], 0b01111111); // the rest of 20, padded with 1's.
-    EXPECT_EQ(val[2], 0b11111111); // rle flag
+    EXPECT_EQ(val[0], 0b01100111); // 1, then 3, then padded with 1's.
+    EXPECT_EQ(val[1], 0b11111111); // rle flag
+    EXPECT_EQ(val[2], 0b11101111); // the rest of 20, padded with 1's.
     EXPECT_EQ(val[3], 0b11010000); // the terminating 4
 }
 
@@ -220,9 +220,9 @@ TEST(PackTest, RleAutoChoice) {
     sample = std::vector<uint16_t>(13, 2);
     val = spacker::pack_psip<true>(sample.size(), sample.data());
     EXPECT_EQ(val.size(), 3);
-    EXPECT_EQ(val[0], 0b10111010); // value (2) + width (13 - 5 = 8)
-    EXPECT_EQ(val[1], 0b00111111); // padded
-    EXPECT_EQ(val[2], 0b11111111); // RLE marker
+    EXPECT_EQ(val[0], 0b10111111); // value (2), padded with 1's.
+    EXPECT_EQ(val[1], 0b11111111); // RLE marker
+    EXPECT_EQ(val[2], 0b11101000); // length (8)
 
     sample.pop_back();
     val = spacker::pack_psip<true>(sample.size(), sample.data());

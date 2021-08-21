@@ -223,9 +223,6 @@ std::vector<uint8_t> pack_psip (size_t n, const T* input) {
                 }
 
                 if (naive_cost > rle_cost) {
-                    // Adding the length.
-                    pack_psip_inner(count, leftover, buffer, output);
-
                     if (leftover < width && leftover > 0) { 
                         // Padding the current buffer with 1's.
                         uint8_t mask = 1;
@@ -242,6 +239,10 @@ std::vector<uint8_t> pack_psip (size_t n, const T* input) {
 
                     // Adding the RLE marker.
                     output.push_back(0b11111111);
+
+                    // Adding the length.
+                    pack_psip_inner(count, leftover, buffer, output);
+
                     i = copy;
                     use_rle = true;
                 }

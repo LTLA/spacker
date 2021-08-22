@@ -7,7 +7,8 @@
 #include <array>
 #include <algorithm>
 
-#include "pack_psip.hpp"
+#include "utils.hpp"
+#include "Doubling.hpp"
 
 namespace spacker {
 
@@ -50,40 +51,40 @@ std::array<T, 8> initialize_baseline() {
     std::array<T, 8> baseline;
     std::fill_n(baseline.data(), baseline.size(), 0);
 
-    baseline[0] = Scheme::template min<T, 0>();
+    baseline[0] = min<T, Scheme, 0>();
 
-    if constexpr(Scheme::template supports<T, 0>()) {
-        baseline[1] = Scheme::template min<T, 1>();
+    if constexpr(supports<T, Scheme, 0>()) {
+        baseline[1] = min<T, Scheme, 1>();
     }
 
-    if constexpr(Scheme::template supports<T, 1>()) {
-        baseline[2] = Scheme::template min<T, 2>();
+    if constexpr(supports<T, Scheme, 1>()) {
+        baseline[2] = min<T, Scheme, 2>();
     }
 
-    if constexpr(Scheme::template supports<T, 2>()) {
-        baseline[3] = Scheme::template min<T, 3>();
+    if constexpr(supports<T, Scheme, 2>()) {
+        baseline[3] = min<T, Scheme, 3>();
     }
 
-    if constexpr(Scheme::template supports<T, 3>()) {
-        baseline[4] = Scheme::template min<T, 4>();
+    if constexpr(supports<T, Scheme, 3>()) {
+        baseline[4] = min<T, Scheme, 4>();
     }
 
-    if constexpr(Scheme::template supports<T, 4>()) {
-        baseline[5] = Scheme::template min<T, 5>();
+    if constexpr(supports<T, Scheme, 4>()) {
+        baseline[5] = min<T, Scheme, 5>();
     }
 
-    if constexpr(Scheme::template supports<T, 5>()) {
-        baseline[6] = Scheme::template min<T, 6>();
+    if constexpr(supports<T, Scheme, 5>()) {
+        baseline[6] = min<T, Scheme, 6>();
     }
 
-    if constexpr(Scheme::template supports<T, 6>()) {
-        baseline[7] = Scheme::template min<T, 7>();
+    if constexpr(supports<T, Scheme, 6>()) {
+        baseline[7] = min<T, Scheme, 7>();
     }
 
     return baseline;
 }
 
-template<class Scheme = Psip, typename T>
+template<class Scheme = Doubling<>, typename T>
 void unpack_psip(size_t ni, const uint8_t* input, size_t no, T* output) {
     std::array<T, 8> buffer;
     std::fill_n(buffer.data(), buffer.size(), 0);

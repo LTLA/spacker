@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include "spacker/pack_psip.hpp"
 #include "spacker/unpack_psip.hpp"
 
 #include <cstdint>

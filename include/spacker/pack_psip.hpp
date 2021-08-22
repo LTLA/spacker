@@ -5,6 +5,9 @@
 #include <vector>
 #include <limits>
 
+#include "utils.hpp"
+#include "Doubling.hpp"
+
 /**
  * @file pack_psip.hpp
  *
@@ -13,64 +16,34 @@
 
 namespace spacker {
 
-struct Psip {
-    template<typename T, int bits>
-    static constexpr bool supports() {
-        static_assert(bits <= 7);
-        return ((1 << bits) <= std::numeric_limits<T>::digits);
-    }
-
-    static constexpr int max_bits_per_byte = 3; // set to -1 if it can never fit into a byte.
-
-    template<typename T, int bits>
-    static constexpr T max() {
-        if constexpr(bits == 0) {
-            return 1;
-        } else {
-            static_assert(supports<T, bits>());
-            constexpr int shift = (1 << bits) - bits - 1; // a.k.a. 2^(bits) - bits - 1, where the 1 comes from the extra zero.
-            constexpr T space = (static_cast<T>(1) << shift); 
-            constexpr T previous = max<T, bits - 1>();
-            return previous + space;
-        }
-    }
-
-    template<typename T, int bits>
-    static constexpr T min() {
-        if constexpr(bits == 0) {
-            return 1;
-        } else {
-            return max<T, bits - 1>() + 1;
-        }
-    }
-
-    // Methods for unpacking.
-    static void update_remaining(int& remaining, int has_bit) {
-        remaining <<= has_bit;
-    }
-
-    static constexpr int init_remaining = 1;
-};
-
 template<typename T, int max_bits, class Scheme, int start_bits>
 inline void determine_bits(T& val, int& bits) {
     if constexpr(start_bits == max_bits) {
         bits = start_bits;        
-        val -= Scheme::template min<T, start_bits>();
+        val -= min<T, Scheme, start_bits>();
     } else {
-        if constexpr(Scheme::template supports<T, start_bits>()) {
-            if (val <= Scheme::template max<T, start_bits>()) {
+        if constexpr(supports<T, Scheme, start_bits>()) {
+            if (val <= max<T, Scheme, start_bits>()) {
                 bits = start_bits;
-                val -= Scheme::template min<T, start_bits>();
+                val -= min<T, Scheme, start_bits>();
             } else {
                 determine_bits<T, max_bits, Scheme, start_bits + 1>(val, bits);
             }
         } else {
             bits = start_bits;
-            val -= Scheme::template min<T, start_bits>();
+            val -= min<T, Scheme, start_bits>();
         }
     }
     return;
+}
+
+template<class Scheme, typename T>
+inline constexpr int min_bits_per_byte() {
+    if constexpr(max<T, Scheme, 0>() == 1) {
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
 template<class Scheme, typename T>
@@ -78,7 +51,7 @@ int pack_psip_inner(T val, int& leftover, uint8_t& buffer, std::vector<uint8_t>&
     constexpr int width = 8;
 
     // Packed version is a single bit.
-    if constexpr(Scheme::template max<T, 0>() == 1) {
+    if constexpr(max<T, Scheme, 0>() == 1) {
         if (val == 1) {
             buffer <<= 1;
             --leftover; 
@@ -91,13 +64,13 @@ int pack_psip_inner(T val, int& leftover, uint8_t& buffer, std::vector<uint8_t>&
         }
     }
 
-    if constexpr(Scheme::max_bits_per_byte >= 0) {
+    if constexpr(Scheme::max_bits_per_byte() >= 0) {
         // Packed version fits into 1 byte.
-        if (val <= Scheme::template max<T, Scheme::max_bits_per_byte>()) {
+        if (val <= max<T, Scheme, Scheme::max_bits_per_byte()>()) {
             int bits;
-            determine_bits<T, Scheme::max_bits_per_byte, Scheme, 1>(val, bits);
+            determine_bits<T, Scheme::max_bits_per_byte(), Scheme, min_bits_per_byte<Scheme, T>()>(val, bits);
 
-            const int required = (1 << bits);
+            const int required = Scheme::width(bits);
             uint8_t signature = (static_cast<uint8_t>(1) << (bits + 1)) - 2;
             signature <<= required - bits - 1;
             signature |= val;
@@ -136,7 +109,7 @@ int pack_psip_inner(T val, int& leftover, uint8_t& buffer, std::vector<uint8_t>&
     
     // No chance of fitting in a single uint8_t.
     int bits;
-    determine_bits<T, 7, Scheme, Scheme::max_bits_per_byte + 1>(val, bits);
+    determine_bits<T, 7, Scheme, Scheme::max_bits_per_byte() + 1>(val, bits);
     const int siglen = bits + 1;
     const uint8_t preamble = (siglen == width ? std::numeric_limits<uint8_t>::max() - 1 : (static_cast<uint8_t>(1) << siglen) - 2); 
 
@@ -164,7 +137,7 @@ int pack_psip_inner(T val, int& leftover, uint8_t& buffer, std::vector<uint8_t>&
 
     // Adding the rest of the signature. This requires some fiddling
     // to account for potential differences in integer width.
-    const int required = (1 << bits);
+    const int required = Scheme::width(bits);
     int remaining = required - siglen;
     constexpr int available = std::numeric_limits<T>::digits;
 
@@ -210,7 +183,7 @@ int pack_psip_inner(T val, int& leftover, uint8_t& buffer, std::vector<uint8_t>&
     return required;
 }
 
-template<bool rle = true, class Scheme = Psip, typename T>
+template<bool rle = true, class Scheme = Doubling<>, typename T>
 std::vector<uint8_t> pack_psip (size_t n, const T* input) {
     size_t i = 0;
     uint8_t buffer = 0;
@@ -238,10 +211,10 @@ std::vector<uint8_t> pack_psip (size_t n, const T* input) {
             if (naive_cost > rle_cost) {
 
                 // Exact cost-effectiveness check.
-                int run_width;
+                int run_bits;
                 size_t count_copy = count;
-                determine_bits<size_t, 7, Scheme, 0>(count_copy, run_width);
-                rle_cost += (1 << run_width);
+                determine_bits<size_t, 7, Scheme, 0>(count_copy, run_bits);
+                rle_cost += Scheme::width(run_bits);
                 if (leftover < width && leftover > 0) {
                     rle_cost += leftover;
                 }

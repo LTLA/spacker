@@ -46,12 +46,7 @@ inline void unpack_psip_step (int keep, Bits& bits, Buffer& buffer, int& preambl
 }
 
 template<typename T>
-void unpack_psip(size_t ni, const uint8_t* input, size_t no, T* output) {
-    std::array<T, 8> buffer;
-    std::fill_n(buffer.data(), buffer.size(), 0);
-    std::array<int, 8> bits;
-    std::fill_n(bits.data(), bits.size(), 0);
-
+std::array<T, 8> initialize_baseline() {
     std::array<T, 8> baseline;
     std::fill_n(baseline.data(), baseline.size(), 0);
 
@@ -73,6 +68,23 @@ void unpack_psip(size_t ni, const uint8_t* input, size_t no, T* output) {
         baseline[7] = min_value_psip<T, 7>();
     }
 
+    return baseline;
+}
+
+template<typename T>
+void unpack_psip(size_t ni, const uint8_t* input, size_t no, T* output) {
+    std::array<T, 8> buffer;
+    std::fill_n(buffer.data(), buffer.size(), 0);
+    std::array<int, 8> bits;
+    std::fill_n(bits.data(), bits.size(), 0);
+    auto baseline = initialize_baseline<T>();
+
+    // Rle-related equivalents; this needs to be duplicated to ensure that we
+    // can successfully recover lengths greater than T's max value.
+    std::array<size_t, 8> rle_buffer;
+    std::fill_n(rle_buffer.data(), rle_buffer.size(), 0);
+    auto rle_baseline = initialize_baseline<size_t>();
+
     // A boolean flag indicating whether we're still in the preamble.
     // We use int for easier multiplications below. We start at 1
     // to support the situation where the first entry is a preamble;
@@ -86,34 +98,88 @@ void unpack_psip(size_t ni, const uint8_t* input, size_t no, T* output) {
     // Where are we with respect to the buffers?
     int at = 0; 
 
-    for (size_t i = 0; i < ni; ++i, ++input) {
+    size_t i = 0;
+    while (i < ni) {
         auto val = *input;
 
-        // Manually unrolled. 
-        unpack_psip_step ((val & 0b10000000) != 0, bits, buffer, preamble, remaining, at);
-        unpack_psip_step ((val & 0b01000000) != 0, bits, buffer, preamble, remaining, at);
-        unpack_psip_step ((val & 0b00100000) != 0, bits, buffer, preamble, remaining, at);
-        unpack_psip_step ((val & 0b00010000) != 0, bits, buffer, preamble, remaining, at);
-        unpack_psip_step ((val & 0b00001000) != 0, bits, buffer, preamble, remaining, at);
-        unpack_psip_step ((val & 0b00000100) != 0, bits, buffer, preamble, remaining, at);
-        unpack_psip_step ((val & 0b00000010) != 0, bits, buffer, preamble, remaining, at);
-        unpack_psip_step ((val & 0b00000001) != 0, bits, buffer, preamble, remaining, at);
+        if (preamble == 1 && val == 0b11111111) {
+            // Rle mode; running through and extracting the length.
+            preamble = 1;
+            remaining = 1;
+            bits[at] = 0;
 
-        // Moving results to the output buffer.
-        int bound = std::min(static_cast<size_t>(at), no);
-        for (int i = 0; i < bound; ++i, ++output) {
-            *output = buffer[i] + baseline[bits[i]];
+            do {
+                ++i;
+                ++input;
+                val = *input;
+
+                unpack_psip_step ((val & 0b10000000) != 0, bits, rle_buffer, preamble, remaining, at);
+                unpack_psip_step ((val & 0b01000000) != 0, bits, rle_buffer, preamble, remaining, at);
+                unpack_psip_step ((val & 0b00100000) != 0, bits, rle_buffer, preamble, remaining, at);
+                unpack_psip_step ((val & 0b00010000) != 0, bits, rle_buffer, preamble, remaining, at);
+                unpack_psip_step ((val & 0b00001000) != 0, bits, rle_buffer, preamble, remaining, at);
+                unpack_psip_step ((val & 0b00000100) != 0, bits, rle_buffer, preamble, remaining, at);
+                unpack_psip_step ((val & 0b00000010) != 0, bits, rle_buffer, preamble, remaining, at);
+                unpack_psip_step ((val & 0b00000001) != 0, bits, rle_buffer, preamble, remaining, at);
+
+            } while (at == 0 && i != ni - 1);
+
+            size_t len = rle_buffer[0] + rle_baseline[bits[0]];
+            size_t extra = len - 1; // extra ones to add, beyond the value already added.
+            std::fill(output, output + extra, *(output - 1)); // cloning
+            output += extra;
+            no -= extra;
+
+            // Moving any other results to the output buffer.
+            int bound = std::min(static_cast<size_t>(at), no);
+            for (int b = 1; b < bound; ++b, ++output) {
+                *output = rle_buffer[b] + baseline[bits[b]];
+            }
+            no -= bound - 1; // because we already processed the first.
+
+            // Preparing for the next byte.
+            std::fill_n(rle_buffer.data(), at, 0);
+            std::fill_n(bits.data(), at, 0);
+            if (at && at < buffer.size()) {
+                buffer[0] = rle_buffer[at];
+                rle_buffer[at] = 0;
+                std::swap(bits[0], bits[at]);
+            } 
+            at = 0;
+
+            ++i;
+            ++input;
+
+        } else {
+            // Manually unrolled. 
+            unpack_psip_step ((val & 0b10000000) != 0, bits, buffer, preamble, remaining, at);
+            unpack_psip_step ((val & 0b01000000) != 0, bits, buffer, preamble, remaining, at);
+            unpack_psip_step ((val & 0b00100000) != 0, bits, buffer, preamble, remaining, at);
+            unpack_psip_step ((val & 0b00010000) != 0, bits, buffer, preamble, remaining, at);
+            unpack_psip_step ((val & 0b00001000) != 0, bits, buffer, preamble, remaining, at);
+            unpack_psip_step ((val & 0b00000100) != 0, bits, buffer, preamble, remaining, at);
+            unpack_psip_step ((val & 0b00000010) != 0, bits, buffer, preamble, remaining, at);
+            unpack_psip_step ((val & 0b00000001) != 0, bits, buffer, preamble, remaining, at);
+
+            // Moving results to the output buffer.
+            int bound = std::min(static_cast<size_t>(at), no);
+            for (int i = 0; i < bound; ++i, ++output) {
+                *output = buffer[i] + baseline[bits[i]];
+            }
+            no -= bound;
+
+            // Resetting for the next byte.
+            std::fill_n(buffer.data(), at, 0);
+            std::fill_n(bits.data(), at, 0);
+            if (at && at < buffer.size()) {
+                std::swap(buffer[0], buffer[at]);
+                std::swap(bits[0], bits[at]);
+            } 
+            at = 0;
+
+            ++i;
+            ++input;
         }
-        no -= bound;
-
-        // Resetting for the next byte.
-        std::fill_n(buffer.data(), at, 0);
-        std::fill_n(bits.data(), at, 0);
-        if (at && at < buffer.size()) {
-            std::swap(buffer[0], buffer[at]);
-            std::swap(bits[0], bits[at]);
-        } 
-        at = 0;
     }
 
     return;

@@ -50,9 +50,7 @@ int pack_psip_inner(T val, int& leftover, uint8_t& buffer, std::vector<uint8_t>&
         return 1;
 
     } else if (val <= max_value_psip<T, 3>()) {
-        // This is where most of the values below uint8_t's will go.
         int bits;
-
         if (val <= max_value_psip<T, 1>()) {
             bits = 1;
             val -= min_value_psip<T, 1>();
@@ -64,14 +62,19 @@ int pack_psip_inner(T val, int& leftover, uint8_t& buffer, std::vector<uint8_t>&
             val -= min_value_psip<T, 3>();
         }
 
-        int required = (1 << bits);
+        const int required = (1 << bits);
         uint8_t signature = (static_cast<uint8_t>(1) << (bits + 1)) - 2;
         signature <<= required - bits - 1;
         signature |= val;
 
+        // Can it fit into 1 byte, or do we have to split it across 2?
         if (required <= leftover) {
-            buffer <<= required;
-            buffer |= signature;
+            if (required < width) {
+                buffer <<= required;
+                buffer |= signature;
+            } else {
+                buffer = signature;
+            }
             leftover -= required;
             if (leftover == 0) {
                 output.push_back(buffer);
@@ -79,7 +82,9 @@ int pack_psip_inner(T val, int& leftover, uint8_t& buffer, std::vector<uint8_t>&
                 buffer = 0;
             }
         } else {
-            buffer <<= leftover;
+            // not possible for leftover == width here, otherwise
+            // it would have fallen into the previous clause.
+            buffer <<= leftover; 
             int overflow = required - leftover;
             auto first = (signature >> overflow);
             buffer |= first;
@@ -118,8 +123,8 @@ int pack_psip_inner(T val, int& leftover, uint8_t& buffer, std::vector<uint8_t>&
             }
         }
 
-        int siglen = bits + 1;
-        uint8_t preamble = (siglen == width ? std::numeric_limits<uint8_t>::max() - 1 : (static_cast<uint8_t>(1) << siglen) - 2); 
+        const int siglen = bits + 1;
+        const uint8_t preamble = (siglen == width ? std::numeric_limits<uint8_t>::max() - 1 : (static_cast<uint8_t>(1) << siglen) - 2); 
 
         // Adding the preamble first.
         if (siglen <= leftover) {
@@ -145,32 +150,54 @@ int pack_psip_inner(T val, int& leftover, uint8_t& buffer, std::vector<uint8_t>&
 
         // Adding the rest of the signature. This requires some fiddling
         // to account for potential differences in integer width.
-        int required = (1 << bits);
+        const int required = (1 << bits);
         int remaining = required - siglen;
         constexpr int available = std::numeric_limits<T>::digits;
 
-        while (remaining > leftover) {
+        // Note that remaining >= leftover; to get to this point, required must
+        // be at least 16, siglen cannot be more than 8, so remaining must be
+        // at least 8, and leftover is no more than 8. This ensures that the
+        // remaining operations are sensible, e.g., remaining -= leftover.
+
+        if (leftover < width) {
             buffer <<= leftover;
-
-            int shift = remaining - leftover; 
-            auto first = (shift > available ? 0 : (val >> shift) & 0b11111111);
-            buffer |= static_cast<uint8_t>(first);
+            remaining -= leftover; // this is the shift to be applied to obtain the 8 bits of interest.
+            if (remaining < available) {
+                auto of_interest = (val >> remaining) & 0b11111111;
+                buffer |= static_cast<uint8_t>(of_interest);
+            }
             output.push_back(buffer);
-
-            remaining -= leftover;
-            buffer = 0;
-            leftover = width;
-            val ^= (first << shift); 
+        } else {
+            ; // if leftover = width, buffer should have already been set to 0.
         }
 
-        leftover -= remaining;
-        buffer <<= leftover;
-        buffer |= val;
+        // Looping through all additional full-size bytes occupied by the current value.
+        while (remaining >= width) {
+            remaining -= width; 
+            if (remaining >= available) {
+                output.push_back(0);
+            } else {
+                auto of_interest = (val >> remaining) & 0b11111111;
+                output.push_back(static_cast<uint8_t>(of_interest));
+            }
+        } 
+
+        // Clearing out the remaining bytes.
+        if (remaining) {
+            leftover = width - remaining;
+            int shift = available - remaining;
+            auto of_interest = (val << shift) >> shift;
+            buffer |= static_cast<uint8_t>(of_interest);
+        } else {
+            leftover = width;
+            buffer = 0;
+        }
+
         return required;
     }
 }
 
-template<bool rle = false, typename T>
+template<bool rle = true, typename T>
 std::vector<uint8_t> pack_psip (size_t n, const T* input) {
     size_t i = 0;
     uint8_t buffer = 0;

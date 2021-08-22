@@ -11,13 +11,13 @@
 
 namespace spacker {
 
-template<class Bits, class Buffer>
+template<class Scheme, class Bits, class Buffer>
 inline void unpack_psip_step (int keep, Bits& bits, Buffer& buffer, int& preamble, int& remaining, int& at) {
     // If preamble = true AND keep = true, we have an extra bit in the
     // preamble, we increase the remaining count. Otherwise neither
     // bits nor remaining will change.
     bits[at] += preamble * keep;
-    remaining <<= preamble * keep;
+    Scheme::update_remaining(remaining, preamble * keep);
 
     // If preamble = false, we left-shift the existing buffer element.
     // If additionally keep = true, we set the least significant bit.
@@ -38,52 +38,64 @@ inline void unpack_psip_step (int keep, Bits& bits, Buffer& buffer, int& preambl
 
     // If there are no more remaining bits, we must be moving to the
     // preamble of the next element. In that case, we set remaining = 1
-    // so that later left-shifts have an effect.
+    // so that later left-shifts or multiplications have an effect.
     at += (remaining == 0); 
-    remaining += (remaining == 0);
+    remaining += (remaining == 0) * Scheme::init_remaining;
 
     return;
 }
 
-template<typename T>
+template<class Scheme, typename T>
 std::array<T, 8> initialize_baseline() {
     std::array<T, 8> baseline;
     std::fill_n(baseline.data(), baseline.size(), 0);
 
-    baseline[0] = min_value_psip<T, 0>();
-    baseline[1] = min_value_psip<T, 1>();
-    baseline[2] = min_value_psip<T, 2>();
-    baseline[3] = min_value_psip<T, 3>();
-    baseline[4] = min_value_psip<T, 4>();
+    baseline[0] = Scheme::template min<T, 0>();
 
-    // TODO: clean this up
-    constexpr int digits = std::numeric_limits<T>::digits;
-    if constexpr(digits >= (1 << 4)) {
-        baseline[5] = min_value_psip<T, 5>();
+    if constexpr(Scheme::template supports<T, 0>()) {
+        baseline[1] = Scheme::template min<T, 1>();
     }
-    if constexpr(digits >= (1 << 5)) {
-        baseline[6] = min_value_psip<T, 6>();
+
+    if constexpr(Scheme::template supports<T, 1>()) {
+        baseline[2] = Scheme::template min<T, 2>();
     }
-    if constexpr(digits >= (1 << 6)) {
-        baseline[7] = min_value_psip<T, 7>();
+
+    if constexpr(Scheme::template supports<T, 2>()) {
+        baseline[3] = Scheme::template min<T, 3>();
+    }
+
+    if constexpr(Scheme::template supports<T, 3>()) {
+        baseline[4] = Scheme::template min<T, 4>();
+    }
+
+    if constexpr(Scheme::template supports<T, 4>()) {
+        baseline[5] = Scheme::template min<T, 5>();
+    }
+
+    if constexpr(Scheme::template supports<T, 5>()) {
+        baseline[6] = Scheme::template min<T, 6>();
+    }
+
+    if constexpr(Scheme::template supports<T, 6>()) {
+        baseline[7] = Scheme::template min<T, 7>();
     }
 
     return baseline;
 }
 
-template<typename T>
+template<class Scheme = Psip, typename T>
 void unpack_psip(size_t ni, const uint8_t* input, size_t no, T* output) {
     std::array<T, 8> buffer;
     std::fill_n(buffer.data(), buffer.size(), 0);
     std::array<int, 8> bits;
     std::fill_n(bits.data(), bits.size(), 0);
-    auto baseline = initialize_baseline<T>();
+    auto baseline = initialize_baseline<Scheme, T>();
 
     // Rle-related equivalents; this needs to be duplicated to ensure that we
     // can successfully recover lengths greater than T's max value.
     std::array<size_t, 8> rle_buffer;
     std::fill_n(rle_buffer.data(), rle_buffer.size(), 0);
-    auto rle_baseline = initialize_baseline<size_t>();
+    auto rle_baseline = initialize_baseline<Scheme, size_t>();
 
     // A boolean flag indicating whether we're still in the preamble.
     // We use int for easier multiplications below. We start at 1
@@ -113,14 +125,14 @@ void unpack_psip(size_t ni, const uint8_t* input, size_t no, T* output) {
                 ++input;
                 val = *input;
 
-                unpack_psip_step ((val & 0b10000000) != 0, bits, rle_buffer, preamble, remaining, at);
-                unpack_psip_step ((val & 0b01000000) != 0, bits, rle_buffer, preamble, remaining, at);
-                unpack_psip_step ((val & 0b00100000) != 0, bits, rle_buffer, preamble, remaining, at);
-                unpack_psip_step ((val & 0b00010000) != 0, bits, rle_buffer, preamble, remaining, at);
-                unpack_psip_step ((val & 0b00001000) != 0, bits, rle_buffer, preamble, remaining, at);
-                unpack_psip_step ((val & 0b00000100) != 0, bits, rle_buffer, preamble, remaining, at);
-                unpack_psip_step ((val & 0b00000010) != 0, bits, rle_buffer, preamble, remaining, at);
-                unpack_psip_step ((val & 0b00000001) != 0, bits, rle_buffer, preamble, remaining, at);
+                unpack_psip_step<Scheme>((val & 0b10000000) != 0, bits, rle_buffer, preamble, remaining, at);
+                unpack_psip_step<Scheme>((val & 0b01000000) != 0, bits, rle_buffer, preamble, remaining, at);
+                unpack_psip_step<Scheme>((val & 0b00100000) != 0, bits, rle_buffer, preamble, remaining, at);
+                unpack_psip_step<Scheme>((val & 0b00010000) != 0, bits, rle_buffer, preamble, remaining, at);
+                unpack_psip_step<Scheme>((val & 0b00001000) != 0, bits, rle_buffer, preamble, remaining, at);
+                unpack_psip_step<Scheme>((val & 0b00000100) != 0, bits, rle_buffer, preamble, remaining, at);
+                unpack_psip_step<Scheme>((val & 0b00000010) != 0, bits, rle_buffer, preamble, remaining, at);
+                unpack_psip_step<Scheme>((val & 0b00000001) != 0, bits, rle_buffer, preamble, remaining, at);
 
             } while (at == 0 && i != ni - 1);
 
@@ -152,14 +164,14 @@ void unpack_psip(size_t ni, const uint8_t* input, size_t no, T* output) {
 
         } else {
             // Manually unrolled. 
-            unpack_psip_step ((val & 0b10000000) != 0, bits, buffer, preamble, remaining, at);
-            unpack_psip_step ((val & 0b01000000) != 0, bits, buffer, preamble, remaining, at);
-            unpack_psip_step ((val & 0b00100000) != 0, bits, buffer, preamble, remaining, at);
-            unpack_psip_step ((val & 0b00010000) != 0, bits, buffer, preamble, remaining, at);
-            unpack_psip_step ((val & 0b00001000) != 0, bits, buffer, preamble, remaining, at);
-            unpack_psip_step ((val & 0b00000100) != 0, bits, buffer, preamble, remaining, at);
-            unpack_psip_step ((val & 0b00000010) != 0, bits, buffer, preamble, remaining, at);
-            unpack_psip_step ((val & 0b00000001) != 0, bits, buffer, preamble, remaining, at);
+            unpack_psip_step<Scheme>((val & 0b10000000) != 0, bits, buffer, preamble, remaining, at);
+            unpack_psip_step<Scheme>((val & 0b01000000) != 0, bits, buffer, preamble, remaining, at);
+            unpack_psip_step<Scheme>((val & 0b00100000) != 0, bits, buffer, preamble, remaining, at);
+            unpack_psip_step<Scheme>((val & 0b00010000) != 0, bits, buffer, preamble, remaining, at);
+            unpack_psip_step<Scheme>((val & 0b00001000) != 0, bits, buffer, preamble, remaining, at);
+            unpack_psip_step<Scheme>((val & 0b00000100) != 0, bits, buffer, preamble, remaining, at);
+            unpack_psip_step<Scheme>((val & 0b00000010) != 0, bits, buffer, preamble, remaining, at);
+            unpack_psip_step<Scheme>((val & 0b00000001) != 0, bits, buffer, preamble, remaining, at);
 
             // Moving results to the output buffer.
             int bound = std::min(static_cast<size_t>(at), no);

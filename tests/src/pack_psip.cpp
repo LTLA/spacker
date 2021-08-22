@@ -2,19 +2,19 @@
 #include "spacker/pack_psip.hpp"
 
 TEST(PackTest, MaxValues) {
-    auto val = spacker::max_value_psip<int, 0>();
+    auto val = spacker::Psip::max<uint32_t, 0>();
     EXPECT_EQ(val, 1);
 
-    val = spacker::max_value_psip<int, 1>();
+    val = spacker::Psip::max<uint32_t, 1>();
     EXPECT_EQ(val, 2);
 
-    val = spacker::max_value_psip<int, 2>();
+    val = spacker::Psip::max<uint32_t, 2>();
     EXPECT_EQ(val, 4);
 
-    val = spacker::max_value_psip<int, 3>();
+    val = spacker::Psip::max<uint32_t, 3>();
     EXPECT_EQ(val, 20);
 
-    val = spacker::max_value_psip<int, 4>();
+    val = spacker::Psip::max<uint32_t, 4>();
     EXPECT_EQ(val, 2068);
 }
 
@@ -142,7 +142,7 @@ TEST(PackTest, ShortOverflow) {
 }
 
 TEST(PackTest, Word) {
-    std::vector<uint32_t> sample{ spacker::min_value_psip<uint32_t, 5>() + 1 };
+    std::vector<uint32_t> sample{ spacker::Psip::min<uint32_t, 5>() + 1 };
     auto packed = spacker::pack_psip<false>(sample.size(), sample.data());
     ASSERT_EQ(packed.size(), 4);
     EXPECT_EQ(packed[0], 0b11111000);
@@ -150,7 +150,7 @@ TEST(PackTest, Word) {
     EXPECT_EQ(packed[2], 0);
     EXPECT_EQ(packed[3], 1);
 
-    sample = std::vector<uint32_t>{ spacker::max_value_psip<uint32_t, 5>() };
+    sample = std::vector<uint32_t>{ spacker::Psip::max<uint32_t, 5>() };
     packed = spacker::pack_psip<false>(sample.size(), sample.data());
     ASSERT_EQ(packed.size(), 4);
     EXPECT_EQ(packed[0], 0b11111011);
@@ -168,7 +168,7 @@ TEST(PackTest, Word) {
 }
 
 TEST(PackTest, WordOverflow) {
-    std::vector<uint32_t> sample{ 0, spacker::min_value_psip<uint32_t, 5>() + 1, 0, spacker::max_value_psip<uint32_t, 5>() };
+    std::vector<uint32_t> sample{ 1, spacker::Psip::min<uint32_t, 5>() + 1, 1, spacker::Psip::max<uint32_t, 5>() };
     auto packed = spacker::pack_psip<false>(sample.size(), sample.data());
     ASSERT_EQ(packed.size(), 9);
     EXPECT_EQ(packed[0], 0b01111100);

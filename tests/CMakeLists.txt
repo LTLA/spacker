@@ -14,6 +14,7 @@ add_executable(
     libtest 
     src/pack_psip.cpp
     src/unpack_psip.cpp
+    src/pack_multiplier.cpp
 )
 
 target_link_libraries(

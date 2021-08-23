@@ -174,7 +174,7 @@ int pack_psip_inner(T val, int& leftover, uint8_t& buffer, std::vector<uint8_t>&
         leftover = width - remaining;
         int shift = available - remaining;
         auto of_interest = (val << shift) >> shift;
-        buffer |= static_cast<uint8_t>(of_interest);
+        buffer = static_cast<uint8_t>(of_interest);
     } else {
         leftover = width;
         buffer = 0;

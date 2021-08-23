@@ -1,0 +1,141 @@
+# Comparison to other methods
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(error=FALSE, message=FALSE)
+```
+
+## Setting up the comparisons
+
+This is a evaluation of how `spacker` does on small positive integer data compared to general purpose compression methods.
+We will compare both speed and the compression ratio.
+
+```{r}
+COMPARE <- function(x) {
+    x0 <- spacker:::encode_short(x)
+
+    gz.time <- system.time(gz.out <- memCompress(x0, type='gzip'))[["elapsed"]]
+    bz.time <- system.time(bz.out <- memCompress(x0, type="bzip2"))[["elapsed"]]
+    xz.time <- system.time(xz.out <- memCompress(x0, type="xz"))[["elapsed"]]
+    spkd.time <- system.time(spkd.out <- spacker::spack(x, method="doubling"))[["elapsed"]]
+    spkm.time <- system.time(spkm.out <- spacker::spack(x, method="multiplier"))[["elapsed"]]
+
+    gz.time.out <- system.time(memDecompress(gz.out, type='gzip'))[["elapsed"]]
+    bz.time.out <- system.time(memDecompress(bz.out, type="bzip2"))[["elapsed"]]
+    xz.time.out <- system.time(memDecompress(xz.out, type="xz"))[["elapsed"]]
+    spkd.time.out <- system.time(spacker:::doubling_unpacker(spkd.out, length(x)))[["elapsed"]]
+    spkm.time.out <- NA# system.time(spacker:::multiplier_unpacker(spkm.out, length(x)))[["elapsed"]]
+
+    packing <- c(
+        SpackDoubling = length(spkd.out),
+        SpackMultiplier = length(spkm.out),
+        Gzip = length(gz.out),
+        Bzip2 = length(bz.out),
+        Xz = length(xz.out)
+    )
+
+    times <- c(
+        spkd.time, 
+        spkm.time,
+        gz.time, 
+        bz.time, 
+        xz.time
+    )
+
+    otimes <- c(
+        spkd.time.out, 
+        spkd.time.out,
+        gz.time.out, 
+        bz.time.out, 
+        xz.time.out
+    )
+
+    data.frame(Ratio=packing/length(x)/4, Time=times, Unpack=otimes)
+}
+```
+
+## Simulating some data
+
+Generating some small positive integer data (a.k.a., mostly 1's).
+`spacker`'s doubling method is in the same ballpark as the other methods in terms of compression, though it is much simpler and faster.
+
+```{r}
+y <- rpois(1e6, 1) + 1
+table(y)
+COMPARE(y)
+
+y <- rpois(1e6, 0.5) + 1
+table(y)
+COMPARE(y)
+
+y <- rpois(1e6, 0.1) + 1
+table(y)
+COMPARE(y)
+```
+
+It deteriorates as soon as the integers get a bit larger, though.
+`spacker`'s assumption of monotonic decreasing frequencies is violated.
+
+```{r}
+y <- rpois(1e6, 10) + 1
+COMPARE(y)
+
+# Restoring that assumption slightly.
+tab <- table(y)
+z <- sort(tab, decreasing=TRUE)
+remapped <- match(y, as.integer(names(z)))
+COMPARE(remapped)
+```
+
+## Playing with real data
+
+The real use-case for `spacker` is in transmitting highly sparse single-cell data, where most of the values are 1.
+Here, we'll have a look at a few datasets.
+
+```{r}
+library(scRNAseq)
+sce <- BacherTCellData()
+counts <- assay(sce)@x
+COMPARE(counts[1:1e6])
+
+deltas <- abs(diff(assay(sce)@i))
+COMPARE(deltas[1:1e6])
+```
+
+```{r, echo=FALSE}
+rm(sce)
+gc()
+```
+
+```{r}
+sce <- ZilionisLungData()
+counts <- assay(sce)@x
+COMPARE(counts[1:1e6])
+
+deltas <- abs(diff(assay(sce)@i))
+COMPARE(deltas[1:1e6])
+```
+
+```{r, echo=FALSE}
+rm(sce)
+gc()
+```
+
+```{r}
+sce <- ZeiselNervousData()
+counts <- assay(sce)@x
+COMPARE(counts[1:1e6])
+
+deltas <- abs(diff(assay(sce)@i))
+COMPARE(deltas[1:1e6])
+```
+
+```{r, echo=FALSE}
+rm(sce)
+gc()
+```
+
+## Session information
+
+```{r}
+sessionInfo()
+```

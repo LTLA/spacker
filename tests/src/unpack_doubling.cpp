@@ -18,7 +18,7 @@ void simple_test(T i) {
     EXPECT_EQ(sample, unpacked);
 }
 
-TEST(UnpackTest, BasicByte) {
+TEST(UnpackDoublingTest, BasicByte) {
     for (int i = 1; i <= std::numeric_limits<uint8_t>::max(); ++i) {
         simple_test<uint8_t, 1>(i);
         simple_test<uint8_t, 4>(i);
@@ -28,7 +28,7 @@ TEST(UnpackTest, BasicByte) {
     }
 }
 
-TEST(UnpackTest, BasicShort) {
+TEST(UnpackDoublingTest, BasicShort) {
     // Trying some bigger, juicer numbers.
     std::vector<uint16_t> targets{ 1, 10, 100, 1000, 10000 };
     for (auto t : targets) {
@@ -40,7 +40,7 @@ TEST(UnpackTest, BasicShort) {
     }
 }
 
-TEST(UnpackTest, BasicWord) {
+TEST(UnpackDoublingTest, BasicWord) {
     // Trying some bigger, juicer numbers.
     std::vector<uint32_t> targets{ 1, 10, 100, 1000, 10000, 100000, 1000000 };
     for (auto t : targets) {
@@ -64,7 +64,7 @@ void rle_test(T i) {
     EXPECT_EQ(sample, unpacked);
 }
 
-TEST(UnpackTest, RleByte) {
+TEST(UnpackDoublingTest, RleByte) {
     for (int i = 1; i <= std::numeric_limits<uint8_t>::max(); ++i) {
         rle_test<uint8_t, 1>(i);
         rle_test<uint8_t, 10>(i);
@@ -73,7 +73,7 @@ TEST(UnpackTest, RleByte) {
     }
 }
 
-TEST(UnpackTest, RleShort) {
+TEST(UnpackDoublingTest, RleShort) {
     // Trying some bigger, juicer numbers.
     std::vector<uint16_t> targets{ 1, 10, 100, 1000, 10000 };
     for (auto t : targets) {
@@ -84,7 +84,7 @@ TEST(UnpackTest, RleShort) {
     }
 }
 
-TEST(UnpackTest, RleWord) {
+TEST(UnpackDoublingTest, RleWord) {
     // Trying some bigger, juicer numbers.
     std::vector<uint32_t> targets{ 1, 10, 100, 1000, 10000, 100000, 1000000 };
     for (auto t : targets) {
@@ -115,7 +115,7 @@ void compare(const std::vector<T>& input) {
     EXPECT_EQ(input, unpacked);
 }
 
-TEST(UnpackTest, RandomUint8) {
+TEST(UnpackDoublingTest, RandomUint8) {
     auto output = randomize<uint8_t>(10, 2);
     compare<false>(output);
 
@@ -126,7 +126,7 @@ TEST(UnpackTest, RandomUint8) {
     compare<false>(output);
 }
 
-TEST(UnpackTest, RandomUint16) {
+TEST(UnpackDoublingTest, RandomUint16) {
     auto output = randomize<uint16_t>(10, 2);
     compare<false>(output);
 
@@ -146,7 +146,7 @@ TEST(UnpackTest, RandomUint16) {
     compare<false>(output);
 }
 
-TEST(UnpackTest, RandomUint32) {
+TEST(UnpackDoublingTest, RandomUint32) {
     auto output = randomize<uint32_t>(10, 2);
     compare<false>(output);
 
@@ -183,7 +183,7 @@ std::vector<T> rle_randomize(size_t n, size_t max_rep, T max_val) {
     return output;
 }
 
-TEST(UnpackTest, RleUint8) {
+TEST(UnpackDoublingTest, RleUint8) {
     auto output = rle_randomize<uint8_t>(10, 20, 2);
     compare<true>(output);
 
@@ -194,7 +194,7 @@ TEST(UnpackTest, RleUint8) {
     compare<true>(output);
 }
 
-TEST(UnpackTest, RleUint16) {
+TEST(UnpackDoublingTest, RleUint16) {
     auto output = rle_randomize<uint16_t>(10, 20, 2);
     compare<true>(output);
 
@@ -214,7 +214,7 @@ TEST(UnpackTest, RleUint16) {
     compare<true>(output);
 }
 
-TEST(UnpackTest, RleUint32) {
+TEST(UnpackDoublingTest, RleUint32) {
     auto output = rle_randomize<uint32_t>(10, 20, 2);
     compare<true>(output);
 

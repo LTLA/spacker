@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include "spacker/pack_psip.hpp"
 
-TEST(PackTest, MaxValues) {
+TEST(PackDoublingTest, MaxValues) {
     auto val = spacker::max<uint32_t, spacker::Doubling<>, 0>();
     EXPECT_EQ(val, 1);
 
@@ -18,28 +18,28 @@ TEST(PackTest, MaxValues) {
     EXPECT_EQ(val, 2068);
 }
 
-TEST(PackTest, AllOnes) {
+TEST(PackDoublingTest, AllOnes) {
     std::vector<uint8_t> sample(8, 1);
     auto packed = spacker::pack_psip<false>(sample.size(), sample.data());
     ASSERT_EQ(packed.size(), 1);
     EXPECT_EQ(packed[0], 0);
 }
 
-TEST(PackTest, AllTwos) {
+TEST(PackDoublingTest, AllTwos) {
     std::vector<uint8_t> sample(4, 2);
     auto packed = spacker::pack_psip<false>(sample.size(), sample.data());
     ASSERT_EQ(packed.size(), 1);
     EXPECT_EQ(packed[0], 0b10101010);
 }
 
-TEST(PackTest, Nibble) {
+TEST(PackDoublingTest, Nibble) {
     std::vector<uint8_t> sample{ 3, 4 };
     auto packed = spacker::pack_psip<false>(sample.size(), sample.data());
     ASSERT_EQ(packed.size(), 1);
     EXPECT_EQ(packed[0], 0b11001101);
 }
 
-TEST(PackTest, NibbleOverflow) {
+TEST(PackDoublingTest, NibbleOverflow) {
     std::vector<uint8_t> sample{ 1, 3, 4 };
     auto packed = spacker::pack_psip<false>(sample.size(), sample.data());
     ASSERT_EQ(packed.size(), 2);
@@ -53,7 +53,7 @@ TEST(PackTest, NibbleOverflow) {
     EXPECT_EQ(packed[1], 0b01000000); // extra bump
 }
 
-TEST(PackTest, Byte) {
+TEST(PackDoublingTest, Byte) {
     std::vector<uint8_t> sample{ 5 };
     auto packed = spacker::pack_psip<false>(sample.size(), sample.data());
     ASSERT_EQ(packed.size(), 1);
@@ -70,7 +70,7 @@ TEST(PackTest, Byte) {
     EXPECT_EQ(packed[0], 0b11101111); // 1111 = 15 -> +4+1 = 10
 }
 
-TEST(PackTest, ByteOverflow) {
+TEST(PackDoublingTest, ByteOverflow) {
     std::vector<uint8_t> sample{ 4, 6 };
     auto packed = spacker::pack_psip<false>(sample.size(), sample.data());
     ASSERT_EQ(packed.size(), 2);
@@ -91,7 +91,7 @@ TEST(PackTest, ByteOverflow) {
     EXPECT_EQ(packed[1], 0b00000001); // 00...001 = 1 -> +20+1 = 22
 }
 
-TEST(PackTest, ShortAgain) {
+TEST(PackDoublingTest, ShortAgain) {
     std::vector<uint16_t> sample{ 22 };
     auto packed = spacker::pack_psip<false>(sample.size(), sample.data());
     ASSERT_EQ(packed.size(), 2);
@@ -111,7 +111,7 @@ TEST(PackTest, ShortAgain) {
     EXPECT_EQ(packed[0], 0b11100101); // 101 = 5 -> +4+1 = 10 
 }
 
-TEST(PackTest, ShortOverflow) {
+TEST(PackDoublingTest, ShortOverflow) {
     std::vector<uint16_t> sample{ 1, 22, 2068 };
     auto packed = spacker::pack_psip<false>(sample.size(), sample.data());
     ASSERT_EQ(packed.size(), 5);
@@ -141,7 +141,7 @@ TEST(PackTest, ShortOverflow) {
     EXPECT_EQ(packed[3], 1); // 00...001 = 1 -> +2068+1 = 2070
 }
 
-TEST(PackTest, Word) {
+TEST(PackDoublingTest, Word) {
     std::vector<uint32_t> sample{ spacker::min<uint32_t, spacker::Doubling<>, 5>() + 1 };
     auto packed = spacker::pack_psip<false>(sample.size(), sample.data());
     ASSERT_EQ(packed.size(), 4);
@@ -167,7 +167,7 @@ TEST(PackTest, Word) {
     EXPECT_EQ(packed[3], 0b00101011); // 997933 -> +2068+1 = 1e6
 }
 
-TEST(PackTest, WordOverflow) {
+TEST(PackDoublingTest, WordOverflow) {
     std::vector<uint32_t> sample{ 1, spacker::min<uint32_t, spacker::Doubling<>, 5>() + 1, 1, spacker::max<uint32_t, spacker::Doubling<>, 5>() };
     auto packed = spacker::pack_psip<false>(sample.size(), sample.data());
     ASSERT_EQ(packed.size(), 9);
@@ -195,7 +195,7 @@ TEST(PackTest, WordOverflow) {
     EXPECT_EQ(packed[8], 0b01011000); // end of the 1000000
 }
 
-TEST(PackTest, RleSimple) {
+TEST(PackDoublingTest, RleSimple) {
     std::vector<uint8_t> sample(100, 1);
     auto val = spacker::pack_psip<true>(sample.size(), sample.data());
     EXPECT_EQ(val.size(), 4);
@@ -215,7 +215,7 @@ TEST(PackTest, RleSimple) {
     EXPECT_EQ(val[4], 0b01001111);
 }
 
-TEST(PackTest, RleComplicated) {
+TEST(PackDoublingTest, RleComplicated) {
     std::vector<uint16_t> sample(21, 3);
     sample[0] = 4;
     sample.push_back(4);
@@ -250,7 +250,7 @@ TEST(PackTest, RleComplicated) {
     EXPECT_EQ(val[5], 0b11010000); // the terminating 4
 }
 
-TEST(PackTest, RleAutoChoice) {
+TEST(PackDoublingTest, RleAutoChoice) {
     // Doesn't even exceed the RLE marker length; this is directly deposited into the buffer.
     std::vector<uint16_t> sample(3, 2);
     auto val = spacker::pack_psip<true>(sample.size(), sample.data());

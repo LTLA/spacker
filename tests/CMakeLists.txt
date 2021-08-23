@@ -12,8 +12,8 @@ enable_testing()
 
 add_executable(
     libtest 
-    src/pack_psip.cpp
-    src/unpack_psip.cpp
+    src/pack_doubling.cpp
+    src/unpack_doubling.cpp
     src/pack_multiplier.cpp
 )
 

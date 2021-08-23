@@ -5,18 +5,18 @@
 
 namespace spacker {
 
-template<uint8_t factor = 4>
+template<int factor = 4>
 struct Multiplier {
-    static uint8_t width(uint8_t bits) {
+    static int width(int bits) {
         return factor * (bits + 1);
     }
 
-    template<uint8_t bits>
-    static constexpr uint8_t width() {
+    template<int bits>
+    static constexpr int width() {
         return factor * (bits + 1);
     }
     
-    static constexpr uint8_t max_bits_per_byte() {
+    static constexpr int max_bits_per_byte() {
         if constexpr(factor > 8) {
             return -1; // cannot fit inside a byte. 
         } else {
@@ -37,11 +37,11 @@ struct Multiplier {
     }
 
     // Methods for unpacking.
-    static void update_remaining(uint8_t& remaining, uint8_t has_bit) {
+    static void update_remaining(int& remaining, int has_bit) {
         remaining += factor * has_bit;
     }
 
-    static constexpr uint8_t init_remaining = factor;
+    static constexpr int init_remaining = factor;
 };
 
 }

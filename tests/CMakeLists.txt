@@ -15,6 +15,7 @@ add_executable(
     src/pack_doubling.cpp
     src/unpack_doubling.cpp
     src/pack_multiplier.cpp
+    src/unpack_multiplier.cpp
 )
 
 target_link_libraries(

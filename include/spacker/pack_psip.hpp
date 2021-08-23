@@ -93,6 +93,8 @@ int pack_psip_inner(T val, int& leftover, uint8_t& buffer, std::vector<uint8_t>&
                 // not possible for leftover == width here, otherwise
                 // it would have fallen into the previous clause.
                 buffer <<= leftover; 
+
+                // not possible for leftover = 0, so overflow < width.
                 int overflow = required - leftover;
                 auto first = (signature >> overflow);
                 buffer |= first;
@@ -115,8 +117,13 @@ int pack_psip_inner(T val, int& leftover, uint8_t& buffer, std::vector<uint8_t>&
 
     // Adding the preamble first.
     if (siglen <= leftover) {
-        buffer <<= siglen;
-        buffer |= preamble;
+        if (leftover == width) {
+            buffer = preamble;
+        } else {
+            buffer <<= siglen;
+            buffer |= preamble;
+        }
+
         leftover -= siglen;
         if (leftover == 0) {
             output.push_back(buffer);
@@ -124,7 +131,12 @@ int pack_psip_inner(T val, int& leftover, uint8_t& buffer, std::vector<uint8_t>&
             buffer = 0;
         }
     } else {
+        // leftover < width must be true here, as otherwise
+        // we would have entered the clause above.
         buffer <<= leftover;
+
+        // siglen cannot be greater than width, and it's not possible for
+        // leftover = 0, so overflow < width.
         int overflow = siglen - leftover;
         auto first = (preamble >> overflow);
         buffer |= first;
@@ -141,18 +153,27 @@ int pack_psip_inner(T val, int& leftover, uint8_t& buffer, std::vector<uint8_t>&
     int remaining = required - siglen;
     constexpr int available = std::numeric_limits<T>::digits;
 
-    // Note that remaining >= leftover; to get to this point, required must
-    // be at least 16, siglen cannot be more than 8, so remaining must be
-    // at least 8, and leftover is no more than 8. This ensures that the
-    // remaining operations are sensible, e.g., remaining -= leftover.
-
     if (leftover < width) {
         buffer <<= leftover;
-        remaining -= leftover; // this is the shift to be applied to obtain the 8 bits of interest.
+
+        // The smallest possible 'required' should be greater than width, i.e.,
+        // an encoding that takes up more than a byte should provide at least a
+        // byte's worth of available bits.
+        static_assert(Scheme::template width<Scheme::max_bits_per_byte() + 1>() - (Scheme::max_bits_per_byte() - 1) - 1 >= width);
+
+        // This is the shift to be applied to obtain the 8 bits of interest.
+        // This is guaranteed to be positive as remaining is guaranteed to be
+        // at least width if the above static_assert passes (and in this 
+        // clause we already know that leftover < width).
+        remaining -= leftover; 
+
         if (remaining < available) {
             auto of_interest = (val >> remaining) & 0b11111111;
             buffer |= static_cast<uint8_t>(of_interest);
+        } else {
+            ; // nothing to do; only zeros to add to the buffer.
         }
+
         output.push_back(buffer);
     } else {
         ; // if leftover = width, buffer should have already been set to 0.
@@ -173,7 +194,7 @@ int pack_psip_inner(T val, int& leftover, uint8_t& buffer, std::vector<uint8_t>&
     if (remaining) {
         leftover = width - remaining;
         int shift = available - remaining;
-        auto of_interest = (val << shift) >> shift;
+        auto of_interest = (val << shift) >> shift; // guaranteed to be valid, as shift < T's width when remaining > 0.
         buffer = static_cast<uint8_t>(of_interest);
     } else {
         leftover = width;
